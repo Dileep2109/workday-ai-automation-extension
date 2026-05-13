@@ -1,0 +1,38 @@
+# --------------------
+# Backend (Python)
+# --------------------
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment Variables / Secrets (CRITICAL)
+.env
+.env.local
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Document files (Resumes)
+*.pdf
+*.docx
+*.doc
+
+# --------------------
+# Extension (Node)
+# --------------------
+node_modules/
+dist/
+dist-tsc/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --------------------
+# OS Files
+# --------------------
+.DS_Store
+Thumbs.db
