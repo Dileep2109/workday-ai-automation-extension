@@ -10,7 +10,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // We might need to proxy API calls here to avoid CORS issues from content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'API_CALL') {
-    fetch(`http://localhost:8000${message.endpoint}`, {
+    fetch(`https://workday-ai-backend.onrender.com/${message.endpoint}`, {
       method: message.method || 'POST',
       headers: {
         'Content-Type': 'application/json',
