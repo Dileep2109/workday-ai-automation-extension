@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import PreferencesForm from './PreferencesForm';
 
-const API_BASE = 'https://workday-ai-backend.onrender.com/';
+const API_BASE = 'https://workday-ai-backend.onrender.com';
 
 function App() {
   const [file, setFile] = useState(null);
