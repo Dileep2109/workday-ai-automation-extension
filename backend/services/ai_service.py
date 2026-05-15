@@ -3,7 +3,7 @@ import json
 import traceback
 
 from dotenv import load_dotenv
-import google.generativeai as genai
+from openai import AsyncOpenAI
 
 from models.schemas import (
     ResumeData,
@@ -20,76 +20,135 @@ from prompts.generate_answer import GENERATE_ANSWER_SYSTEM_PROMPT
 # Load environment variables
 load_dotenv()
 
-# Initialize Gemini client
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Initialize OpenAI client
+client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+
+
+async def generate_json(system_prompt: str, user_content: str, temperature: float = 0.1) -> str:
+    json_input = f"""
+Return only a valid JSON object.
+
+{user_content}
+"""
+
+    response = await client.responses.create(
+        model=MODEL_NAME,
+        instructions=system_prompt,
+        input=json_input,
+        text={"format": {"type": "json_object"}},
+        temperature=temperature,
+    )
+    return response.output_text
 
 async def parse_resume_to_json(raw_text: str) -> ResumeData:
-    """Uses Gemini to parse raw resume text into structured JSON."""
+    """Uses OpenAI to parse raw resume text into structured JSON."""
 
     try:
-        model = genai.GenerativeModel(
-            model_name=MODEL_NAME,
-            system_instruction=PARSE_RESUME_SYSTEM_PROMPT,
-            generation_config={"response_mime_type": "application/json", "temperature": 0.1}
+        parsed_content = await generate_json(
+            PARSE_RESUME_SYSTEM_PROMPT,
+            f"Resume Text:\n{raw_text}",
+            temperature=0.1,
         )
-        
-        response = await model.generate_content_async(f"Resume Text:\n{raw_text}")
 
-        parsed_content = response.text
-
-        print("\n========== RESUME AI RESPONSE ==========")
+        print("\n========== RESUME OPENAI RESPONSE ==========")
         print(parsed_content)
-        print("========================================\n")
+        print("==========================================\n")
 
         return ResumeData.model_validate_json(parsed_content)
 
     except Exception as e:
-        print("\n========== RESUME PARSE ERROR ==========")
-        print(f"Error parsing resume with AI: {e}")
+        print("\n========== RESUME PARSE ERROR (OPENAI) ==========")
+        print(f"Error parsing resume with OpenAI: {e}")
         traceback.print_exc()
-        print("========================================\n")
+        print("=================================================\n")
 
         return ResumeData()
 
 
 async def map_fields(request: BatchFieldMappingRequest) -> BatchFieldMappingResponse:
-    """Uses Gemini to map multiple Workday fields semantically in a single batch."""
+    """Uses OpenAI to map multiple Workday fields semantically in a single batch."""
 
     try:
         fields_json = json.dumps([field.model_dump() for field in request.fields], indent=2)
+        compact_resume = compact_resume_for_mapping(request.resumeData)
         prompt_content = f"""
 Fields to Map:
 {fields_json}
 
-Resume Data:
-{json.dumps(request.resumeData, indent=2)}
+Compact Resume Data:
+{json.dumps(compact_resume, indent=2)}
 """
 
-        model = genai.GenerativeModel(
-            model_name=MODEL_NAME,
-            system_instruction=MAP_FIELD_SYSTEM_PROMPT,
-            generation_config={"response_mime_type": "application/json", "temperature": 0.1}
+        parsed_content = await generate_json(
+            MAP_FIELD_SYSTEM_PROMPT,
+            prompt_content,
+            temperature=0.1,
         )
 
-        response = await model.generate_content_async(prompt_content)
-
-        parsed_content = response.text
-
-        print("\n========== BATCH FIELD MAPPING AI RESPONSE ==========")
+        print("\n========== BATCH FIELD MAPPING OPENAI RESPONSE ==========")
         print(parsed_content)
-        print("=====================================================\n")
+        print("========================================================\n")
 
         return BatchFieldMappingResponse.model_validate_json(parsed_content)
 
     except Exception as e:
-        print("\n========== BATCH FIELD MAPPING ERROR ==========")
-        print(f"Error mapping fields with AI: {e}")
+        print("\n========== BATCH FIELD MAPPING ERROR (OPENAI) ==========")
+        print(f"Error mapping fields with OpenAI: {e}")
         traceback.print_exc()
-        print("===============================================\n")
+        print("========================================================\n")
 
         return BatchFieldMappingResponse(mappings=[])
+
+
+def compact_resume_for_mapping(resume_data: dict) -> dict:
+    """Keep mapping prompts small to avoid quota/token exhaustion."""
+
+    experience = resume_data.get("experience") or []
+    education = resume_data.get("education") or []
+
+    return {
+        "firstName": resume_data.get("firstName", ""),
+        "lastName": resume_data.get("lastName", ""),
+        "email": resume_data.get("email", ""),
+        "phone": resume_data.get("phone", ""),
+        "location": resume_data.get("location", ""),
+        "linkedin": resume_data.get("linkedin", ""),
+        "github": resume_data.get("github", ""),
+        "skills": (resume_data.get("skills") or [])[:20],
+        "certifications": (resume_data.get("certifications") or [])[:10],
+        "latestExperience": compact_experience(experience[0]) if experience else {},
+        "education": [compact_education(item) for item in education[:3]],
+        "applicationDefaults": {
+            "heardAboutUs": "LinkedIn",
+            "currentlyCompanyContractor": "No",
+            "previouslyWorkedForCompany": "No",
+            "requiresSponsorship": "No",
+            "legallyAuthorizedToWork": "Yes",
+            "hasPreferredName": "No",
+        },
+    }
+
+
+def compact_experience(item: dict) -> dict:
+    return {
+        "title": item.get("title", ""),
+        "company": item.get("company", ""),
+        "location": item.get("location", ""),
+        "startDate": item.get("startDate", ""),
+        "endDate": item.get("endDate", ""),
+    }
+
+
+def compact_education(item: dict) -> dict:
+    return {
+        "school": item.get("school", ""),
+        "degree": item.get("degree", ""),
+        "major": item.get("major", ""),
+        "startDate": item.get("startDate", ""),
+        "endDate": item.get("endDate", ""),
+    }
 
 
 async def generate_answer(request: AnswerGenerationRequest) -> AnswerGenerationResponse:
@@ -104,27 +163,23 @@ Resume Data:
 {json.dumps(request.resumeData, indent=2)}
 """
 
-        model = genai.GenerativeModel(
-            model_name=MODEL_NAME,
-            system_instruction=GENERATE_ANSWER_SYSTEM_PROMPT,
-            generation_config={"response_mime_type": "application/json", "temperature": 0.7}
+        parsed_content = await generate_json(
+            GENERATE_ANSWER_SYSTEM_PROMPT,
+            prompt_content,
+            temperature=0.7,
         )
 
-        response = await model.generate_content_async(prompt_content)
-
-        parsed_content = response.text
-
-        print("\n========== ANSWER GENERATION AI RESPONSE ==========")
+        print("\n========== ANSWER GENERATION OPENAI RESPONSE ==========")
         print(parsed_content)
-        print("===================================================\n")
+        print("======================================================\n")
 
         return AnswerGenerationResponse.model_validate_json(parsed_content)
 
     except Exception as e:
-        print("\n========== ANSWER GENERATION ERROR ==========")
-        print(f"Error generating answer with AI: {e}")
+        print("\n========== ANSWER GENERATION ERROR (OPENAI) ==========")
+        print(f"Error generating answer with OpenAI: {e}")
         traceback.print_exc()
-        print("=============================================\n")
+        print("=====================================================\n")
 
         return AnswerGenerationResponse(
             answer="",

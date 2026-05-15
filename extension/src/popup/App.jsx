@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import PreferencesForm from './PreferencesForm';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -46,8 +47,10 @@ function App() {
       const data = await response.json();
       setResumeData(data);
       
-      // Save to chrome storage
-      chrome.storage.local.set({ resumeData: data }, () => {
+      const resumeFile = await fileToStoredResume(file);
+
+      // Save parsed data and original resume file to chrome storage
+      chrome.storage.local.set({ resumeData: data, resumeFile }, () => {
         setStatus('Resume parsed and saved successfully!');
       });
     } catch (err) {
@@ -78,10 +81,13 @@ function App() {
           }
           if (response && response.status === 'completed') {
             if (response.data && response.data.success) {
-              setStatus('Autofill completed for current step.');
+              setStatus(response.data.message || 'Autofill completed.');
               setReviewData(response.data.results);
             } else {
                setStatus(`Autofill failed: ${response.data.message || 'Unknown error'}`);
+               if (response.data && response.data.results) {
+                 setReviewData(response.data.results);
+               }
             }
           }
           setLoading(false);
@@ -114,6 +120,11 @@ function App() {
       )}
 
       <div className="section">
+        <h3>User Preferences</h3>
+        <PreferencesForm />
+      </div>
+
+      <div className="section">
         <h3>3. Autofill Application</h3>
         <button onClick={handleAutofill} disabled={!resumeData || loading}>
           {loading ? 'Autofilling...' : 'Start Autofill'}
@@ -123,18 +134,37 @@ function App() {
       {reviewData && (
         <div className="section review-section">
           <h3>Autofill Summary</h3>
-          <p><strong>Filled:</strong> {reviewData.filled.length}</p>
-          <p><strong>Skipped (Low Confidence):</strong> {reviewData.skipped.length}</p>
+          <div className="summary-stats">
+            <p><strong>Total Filled:</strong> {reviewData.filled.length}</p>
+            <p className="sub-stat">- From Preferences: {reviewData.filled.filter(f => f.source === 'preference').length}</p>
+            <p className="sub-stat">- From Heuristics: {reviewData.filled.filter(f => f.source === 'heuristic').length}</p>
+            <p className="sub-stat">- From AI: {reviewData.filled.filter(f => f.source === 'ai').length}</p>
+            <p><strong>Skipped:</strong> {reviewData.skipped.length}</p>
+            <p><strong>Missing/Unresolved:</strong> {reviewData.unresolved.length}</p>
+          </div>
+
           {reviewData.skipped.length > 0 && (
-            <ul className="review-list">
-              {reviewData.skipped.map((item, idx) => (
-                <li key={idx}>
-                  <strong>{item.label}</strong>: {item.suggested} <em>({(item.confidence * 100).toFixed(0)}%)</em>
-                </li>
-              ))}
-            </ul>
+            <>
+              <h4>Skipped Fields</h4>
+              <ul className="review-list">
+                {reviewData.skipped.map((item, idx) => (
+                  <li key={idx}>
+                    <strong>{item.label}</strong>: {item.suggested} <em>({(item.confidence * 100).toFixed(0)}%)</em>
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
-          <p><strong>Unresolved:</strong> {reviewData.unresolved.length}</p>
+          {reviewData.unresolved.length > 0 && (
+            <>
+              <h4>Missing Values</h4>
+              <ul className="review-list">
+                {reviewData.unresolved.map((label, idx) => (
+                  <li key={idx}>{label}</li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
 
@@ -144,3 +174,25 @@ function App() {
 }
 
 export default App;
+
+function fileToStoredResume(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve({
+        name: file.name,
+        type: file.type || getResumeMimeType(file.name),
+        dataUrl: reader.result
+      });
+    };
+    reader.onerror = () => reject(reader.error || new Error('Failed to read resume file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function getResumeMimeType(fileName) {
+  const lower = String(fileName || '').toLowerCase();
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  return 'application/octet-stream';
+}

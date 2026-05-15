@@ -29,6 +29,7 @@ class FieldInfo(BaseModel):
     fieldLabel: str
     fieldDescription: Optional[str] = None
     fieldType: str
+    options: List[str] = []
 
 class BatchFieldMappingRequest(BaseModel):
     fields: List[FieldInfo]
