@@ -15,10 +15,10 @@ The system automates repetitive Workday application workflows by:
 - Mapping fields using heuristics + AI semantic matching
 - Autofilling multi-step forms
 - Handling React-controlled inputs
-- Managing unresolved fields through reusable profile storage
+- Reusing parsed candidate information across application steps
 - Stopping safely for manual review before submission
 
-The goal is to automate 90–95% of repetitive Workday application workflows while keeping final user review and submission manual for reliability and safety.
+The goal is to automate repetitive Workday application workflows while keeping final user review and submission manual for reliability and safety.
 
 ---
 
@@ -28,7 +28,7 @@ The goal is to automate 90–95% of repetitive Workday application workflows whi
 - Python 3
 - FastAPI
 - Pydantic
-- Gemini / OpenAI API
+- OpenAI API
 - pdfplumber
 - python-docx
 
@@ -64,9 +64,9 @@ The goal is to automate 90–95% of repetitive Workday application workflows whi
 - Convert unstructured text into application-ready JSON
 
 ## AI Semantic Field Mapping
-Maps dynamic Workday fields intelligently:
+Maps dynamic Workday fields intelligently.
 
-Example:
+Examples:
 - "Given Name" → `firstName`
 - "Mobile Phone" → `phone`
 - "Current Employer" → experience/company
@@ -86,19 +86,20 @@ Supports:
 - Application question pages
 - Review flows
 
-## Missing Information Collector
-If a field cannot be resolved:
-- Resume data
-- Stored profile
-- Heuristics
-- AI mapping
+## Parsed Candidate Information Collector
 
-The extension asks the user for input and stores reusable values for future applications.
+After uploading and parsing a resume, the extension extracts structured candidate information and stores it locally for reuse during the Workday application flow.
 
-Example:
-- Current Compensation
-- Notice Period
-- Visa Sponsorship
+The parsed profile information is reused across multiple application steps to reduce repetitive manual entry.
+
+Example reusable information:
+- Full Name
+- Email
+- Phone Number
+- Address
+- LinkedIn Profile
+- Skills
+- Resume-derived details
 
 ## Validation Error Detection
 Automation safely pauses when Workday validation errors are detected.
@@ -131,12 +132,6 @@ pip install -r requirements.txt
 ```
 
 ## 3. Create `.env`
-
-```env
-GEMINI_API_KEY=your_api_key
-```
-
-or
 
 ```env
 OPENAI_API_KEY=your_api_key
@@ -203,19 +198,17 @@ extension/dist
 ## 2. Start Autofill
 - Detect Workday fields
 - Autofill supported fields
+- Reuse parsed candidate information
 
 ## 3. Multi-Step Navigation
 - Continue autofill across application steps
+- Reuse previously parsed candidate data
 
-## 4. Missing Information Handling
-- Collect unresolved values
-- Save reusable profile data
-
-## 5. Validation Safety
+## 4. Validation Safety
 - Detect Workday validation errors
 - Pause automation for manual review
 
-## 6. Final Review
+## 5. Final Review
 - Show filled/skipped fields
 - Stop before manual submission
 
@@ -236,21 +229,25 @@ extension/dist
 
 # Current Limitations
 
-- Some complex Workday dropdowns may vary between implementations
-- Dynamic repeatable sections (education/experience) may require partial manual review
-- Workday DOM structures differ slightly between companies
-- Final submission remains manual intentionally
+- Some complex Workday dropdown implementations vary between companies
+- Repeatable sections like Education and Experience may still require partial manual interaction
+- Certain skills and application-specific fields may not autofill consistently across all Workday implementations
+- Dynamic Workday DOM structures differ slightly between organizations
+- Final submission intentionally remains manual for user review and safety
 
 ---
 
 # Future Improvements
 
-- Better repeatable section automation
-- Improved dropdown intelligence
-- Smarter validation correction
-- Profile templates
-- Cross-platform ATS support
-- Adaptive learning from previous applications
+- Improved Education and Experience section automation
+- Better dropdown intelligence and selection handling
+- Enhanced skills extraction and autofill support
+- AI-assisted validation error correction
+- Smarter company/location inference from resume context
+- Adaptive learning from previous application behavior
+- Reusable profile editing and management UI
+- Support for additional ATS platforms beyond Workday
+- More advanced multi-step workflow orchestration
 
 ---
 
@@ -289,6 +286,6 @@ The system combines:
 - React-based Chrome extension
 - Multi-step workflow automation
 - Validation-aware safety checks
-- Reusable profile storage
+- Parsed candidate information reuse
 
 to reduce repetitive job application effort while preserving user review and submission control.
